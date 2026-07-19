@@ -7,11 +7,7 @@ const PORT = 3000;
 app.use(express.json());
 app.use('/docs', swaggerUI.serve, swaggerUI.setup(swaggerDocument));
 
-let tasks = [ 
-  { id: 1, title: "Do homework", completed: false },
-  { id: 2, title: "Walk the dog", completed: true },
-  { id: 3, title: "Read a book", completed: false }
-];
+const tasks = require('./taskRepository');
 
 app.get('/', (req, res) => {
   res.json({
@@ -21,13 +17,14 @@ app.get('/', (req, res) => {
    });
 });
 
-app.get('/tasks', (req, res) => {
-  res.json(tasks);
+app.get('/tasks', async(req, res) => {
+  const allTasks = await tasks.getAllTasks();
+  res.json(allTasks);
 });
 
-app.get('/tasks/:id', (req, res) => {
+app.get('/tasks/:id', async(req, res) => {
   const id = parseInt(req.params.id);
-  const task = tasks.find(t => t.id === id);
+  const task = await tasks.getTaskById(id);
 
   if (!task) {
     return res.status(404).json({ error: `Task ${id} not found` });
@@ -36,25 +33,43 @@ app.get('/tasks/:id', (req, res) => {
   res.json(task);
 });
 
-app.post('/tasks', (req, res) => {
+app.post('/tasks', async(req, res) => {
   const {title} = req.body;
 
   if (!title || title.trim() === "") {
     return res.status(400).json({ error: "Title is required" });
   }
 
-  const newID = tasks.length > 0
-    ? Math.max(...tasks.map(t => t.id)) + 1
-    : 1;
-
-  const newTask = {
-    id: newID,
-    title: title,
-    done: false
-  };
-
-  tasks.push(newTask);
+  const newTask = await tasks.createTask(title);
   res.status(201).json(newTask);
+});
+
+app.put('/tasks/:id', async(req, res) => {
+  const id = parseInt(req.params.id);
+  const { title, done } = req.body;
+
+  if (title !== undefined && title.trim() === "") {
+    return res.status(400).json({error: 'Title cannot be empty'})
+  }
+
+  const updatedTask = await tasks.updateTask(id, { title, done });
+
+  if (!updatedTask) {
+    return res.status(404).json({ error: `Task ${id} not found` });
+  }
+
+  res.json(updatedTask);
+});
+
+app.delete('/tasks/:id', async(req, res) => {
+  const id = parseInt(req.params.id);
+  const deleted = await tasks.deleteTask(id);
+
+  if (!deleted) {
+    return res.status(404).json({ error: `Task ${id} not found` });
+  }
+
+  res.status(204).send();
 });
 
 app.put('/tasks/:id', (req, res) => {
@@ -77,15 +92,13 @@ app.put('/tasks/:id', (req, res) => {
     res.json(task);
   });
 
-  app.delete('/tasks/:id', (req,res) => {
+  app.delete('/tasks/:id', async(req,res) => {
     const id = parseInt(req.params.id);
-    const index = tasks.findIndex(t => t.id === id);
+    const deleted = await tasks.deleteTask(id);
 
-    if(index === -1) {
-      return res.status(400).json({error: `Task ${id} not found`})
+    if (!deleted) {
+      return res.status(404).json({ error: `Task ${id} not found` });
     }
-
-    tasks.splice(index, 1);
     res.status(204).send();
 
   });
