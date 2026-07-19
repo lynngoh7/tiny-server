@@ -9,23 +9,58 @@ A small in-memory CRUD API for managing a to-do list, built with Node.js and Exp
 
 ## Installation & Running
 
+### Option 1: Docker Compose (recommended — starts app + database together)
+
 1. Clone this repo:
 ```bash
    git clone https://github.com/lynngoh7/tiny-server.git
    cd tiny-server
 ```
 
-2. Install dependencies:
+2. Create a `.env` file based on the example:
 ```bash
-   npm install
+   cp .env.example .env
 ```
 
-3. Start the server:
+3. Start the full stack:
 ```bash
+   docker compose up
+```
+
+4. The app runs at `http://localhost:3000`, and Postgres runs at `localhost:5432`.
+   Tables and seed data are created automatically on first run via `db/init.sql`.
+
+5. To stop everything:
+```bash
+   docker compose down
+```
+   (Data persists in a Docker volume — running `docker compose up` again will still have your data. Add `-v` to `down` if you want to wipe the database entirely.)
+
+### Option 2: Run the app locally, Postgres in Docker
+
+1. Start Postgres only:
+```bash
+   docker run --name tasks-postgres \
+     -e POSTGRES_USER=taskuser \
+     -e POSTGRES_PASSWORD=taskpass \
+     -e POSTGRES_DB=tasksdb \
+     -p 5432:5432 \
+     -v tasks-pgdata:/var/lib/postgresql \
+     -d postgres
+```
+
+2. Load the schema and seed data:
+```bash
+   docker exec -i tasks-postgres psql -U taskuser -d tasksdb < db/init.sql
+```
+
+3. Install dependencies and start the app:
+```bash
+   npm install
    node server.js
 ```
 
-4. The server runs at `http://localhost:3000`.
+4. The app runs at `http://localhost:3000`.
 
 ## Endpoints
 
@@ -66,5 +101,16 @@ Interactive docs are available at `http://localhost:3000/docs` once the server i
 
 ![Swagger UI screenshot](swagger-screenshot.png)
 
-## Notes
-- Data is stored in memory only — restarting the server resets tasks back to the 3 seed examples. This is intentional; a real database is introduced in a later stage.
+## Persistence
+
+Verified by:
+1. Creating a task via `POST /tasks`
+2. Running `docker compose down` (stops and removes containers, but not the named volume)
+3. Running `docker compose up` again
+4. Confirming via `GET /tasks` that the task was still present
+
+This works because Postgres's data directory is mounted to a named Docker volume (`tasks-pgdata`), which persists independently of the container's lifecycle.
+
+## Architecture note
+
+The in-memory task store was replaced with a Postgres-backed repository (`taskRepository.js`). The Express routes and service logic in `server.js` did not change — only the storage layer underneath was swapped, proving the separation between routes and storage.
